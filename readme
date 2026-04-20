@@ -1,0 +1,148 @@
+# Subdomain Map PagerDuty
+
+One-shot Python tool that maps your PagerDuty topology and incident volume into:
+- An XLSX workbook (Services, EscalationPolicies, Teams, Schedules, BusinessServices, Edges)
+- Visuals:
+  - Graphviz DOT (+ PNG if Graphviz is installed)
+  - Mermaid Markdown
+  - Self-contained interactive HTML (open locally)
+
+## Quick start
+
+1) Set your PagerDuty API token (read-only recommended):
+```bash
+export PD_API_TOKEN="<​your_token>"
+Create a virtual environment and install dependencies:
+bash
+Copy
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+Optional: PNG rendering for DOT
+bash
+Copy
+brew install graphviz
+Run (US region by default):
+bash
+Copy
+python pd_topology_map.py --volume-window last_30d --output xlsx --visual all --basename pd_topology_map --overwrite --include-business-services
+Outputs:
+
+pd_topology_map.xlsx
+pd_topology_map.dot and pd_topology_map.png (PNG only if Graphviz installed)
+pd_topology_map.mermaid.md
+pd_topology_map.html
+Options
+--api-host:
+US: https://api.pagerduty.com (default)
+EU: https://api.eu.pagerduty.com
+--volume-window: last_7d | last_30d | last_90d | custom
+For custom, provide --start-iso and --end-iso (UTC, ends with Z)
+--include-business-services: attempts to fetch Business Services + Dependencies (best-effort)
+--include-users: include Users and OnCall (off by default)
+--visual: all | dot | mermaid | html
+--basename: base filename for outputs
+--overwrite: overwrite existing output files
+Security
+No secrets are stored in the repo.
+Set PD_API_TOKEN via environment variable. Rotate if exposed.
+License
+See LICENSE.md
+
+
+FAQ.md
+```markdown
+# FAQ
+
+## I get `command not found: python`
+Use `python3` or activate your virtual environment:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python --version
+ModuleNotFoundError: No module named 'openpyxl'
+Install Python packages with pip (not Homebrew):
+
+bash
+Copy
+source .venv/bin/activate
+pip install -r requirements.txt
+DOT PNG not generated
+PNG requires Graphviz:
+
+bash
+Copy
+brew install graphviz
+401 Unauthorized
+Ensure the token is set in the current shell:
+
+bash
+Copy
+export PD_API_TOKEN="<​your_token>"
+EU region
+bash
+Copy
+python pd_topology_map.py --api-host https://api.eu.pagerduty.com ...
+Business services/dependencies missing
+Might not be enabled in your account. Script logs a warning and continues.
+
+Rate limited (429)
+Script retries with backoff. If persistent, slow down or split runs.
+
+Large orgs
+For <100 services it should be quick. Parallelization can be added later if needed.
+
+Where are outputs written?
+Current directory. Use --basename and --overwrite to control filenames.
+
+
+requirements.txt
+```text
+requests>=2.31.0
+openpyxl>=3.1.2
+.gitignore
+
+text
+Copy
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Outputs
+pd_topology_map.xlsx
+pd_topology_map.dot
+pd_topology_map.png
+pd_topology_map.mermaid.md
+pd_topology_map.html
+Dockerfile
+
+dockerfile
+Copy
+# Minimal container for running the exporter
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY pd_topology_map.py .
+
+# Usage:
+# docker build -t pd-map .
+# docker run --rm -e PD_API_TOKEN=$PD_API_TOKEN -v $PWD:/out pd-map \
+#   python pd_topology_map.py --volume-window last_30d --output xlsx --visual all --basename /out/pd_topology_map --overwrite --include-business-services
+#
+# Note: writing to /out mounts your current directory to retrieve outputs.
